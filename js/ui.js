@@ -1,66 +1,186 @@
-/**
- * Updates the page with weather data
- * @param {Object} weatherData - Data from OpenWeatherMap API
- */
-export function displayWeather(weatherData) {
-    // Extract data from API response
-    const cityName = weatherData.name;
-    const temperature = Math.round(weatherData.main.temp);
-    const feelsLike = Math.round(weatherData.main.feels_like);
-    const humidity = weatherData.main.humidity;
-    const windSpeed = weatherData.wind.speed;
-    const condition = weatherData.weather[0].description;
-    const iconCode = weatherData.weather[0].icon;
-    const iconUrl = `https://openweathermap.org/img/wn/${iconCode}@2x.png`;
+let map = null;
+let currentMarker = null;
+
+export function initMap() {
+    console.log('Initializing map...');
     
-    // Update DOM elements
-    document.getElementById('city-name').textContent = cityName;
-    document.getElementById('temperature').textContent = `${temperature}°C`;
-    document.getElementById('feels-like').textContent = `${feelsLike}°C`;
-    document.getElementById('humidity').textContent = `${humidity}%`;
-    document.getElementById('wind-speed').textContent = `${windSpeed} m/s`;
-    document.getElementById('condition-description').textContent = condition;
+    const mapContainer = document.getElementById('background-map');
+    if (!mapContainer) {
+        console.error('Map container not found!');
+        return;
+    }
     
-    // Update weather icon
-    const iconElement = document.getElementById('weather-icon');
-    iconElement.src = iconUrl;
-    iconElement.alt = `${condition} icon`;
+    map = L.map('background-map').setView([20, 0], 2);
     
-    // Show the weather section (hidden until now)
-    const weatherSection = document.getElementById('weather-result');
-    weatherSection.hidden = false;
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CartoDB',
+        subdomains: 'abcd',
+        minZoom: 1,
+        maxZoom: 19
+    }).addTo(map);
     
-    // Hide any previous error messages
-    hideError();
+    console.log('Map initialized successfully!');
 }
 
-/**
- * Shows error message to user
- * @param {string} message - Error message to display
- */
-export function showError(message) {
-    const errorDiv = document.getElementById('error-message');
-    errorDiv.textContent = message;
-    errorDiv.hidden = false;
+export function showLoading(resultDiv) {
+    resultDiv.hidden = false;
+    resultDiv.innerHTML = `
+        <div class="loading-container">
+            <div class="spinner"></div>
+            <p>🌤️ Fetching weather data...</p>
+        </div>
+    `;
+}
+
+export function showEmptyState(resultDiv) {
+    resultDiv.hidden = false;
+    resultDiv.innerHTML = `
+        <div class="empty-state">
+            <div class="icon">🔍</div>
+            <h3>Search for a city</h3>
+            <p>Enter a city name above to see current weather conditions and location on the map.</p>
+            <p style="margin-top: 10px; font-size: 14px; color: #aaa;">
+                Try: London, Tokyo, New York, Paris, Sydney
+            </p>
+        </div>
+    `;
+}
+export function showError(resultDiv, error) {
+    resultDiv.hidden = false;
+
+    let icon = '⚠️';
+    let title = 'Something went wrong';
+    let details = error.message || 'Unknown error';
+    let suggestions = '';
     
-    // Hide weather section if it was showing
-    document.getElementById('weather-result').hidden = true;
+    if (error.message && error.message.includes('not found')) {
+        icon = '❓';
+        title = 'City not found';
+        suggestions = `
+            <p class="suggestions">
+                💡 Try: 
+                <span data-city="London">London</span>
+                <span data-city="Tokyo">Tokyo</span>
+                <span data-city="New York">New York</span>
+                <span data-city="Paris">Paris</span>
+                <span data-city="Sydney">Sydney</span>
+            </p>
+        `;
+    } else if (error.message && error.message.includes('API key')) {
+        icon = '🔑';
+        title = 'API Key Error';
+        details = 'Please add a valid OpenWeatherMap API key';
+        suggestions = `
+            <p class="suggestions">
+                💡 Get a free key at <a href="https://openweathermap.org/api" target="_blank">OpenWeatherMap</a>
+            </p>
+        `;
+    } else if (error.message && error.message.includes('network')) {
+        icon = '📡';
+        title = 'Network Error';
+        details = 'Please check your internet connection';
+        suggestions = `
+            <p class="suggestions">
+                💡 Make sure you're connected to the internet and try again
+            </p>
+        `;
+    } else if (error.message && error.message.includes('404')) {
+        icon = '🔍';
+        title = 'City Not Found';
+        details = `"${error.city || 'City'}" doesn't exist in our database`;
+        suggestions = `
+            <p class="suggestions">
+                💡 Check spelling or try a different city
+            </p>
+        `;
+    } else {
+        icon = '⚠️';
+        title = 'Oops!';
+        details = error.message || 'An unexpected error occurred';
+    }
+    
+    resultDiv.innerHTML = `
+        <div class="error-state">
+            <div class="icon">${icon}</div>
+            <h3>${title}</h3>
+            <p>${details}</p>
+            ${suggestions}
+            <button onclick="location.reload()" style="margin-top: 15px; padding: 8px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                🔄 Try Again
+            </button>
+        </div>
+    `;
+    
+    document.querySelectorAll('[data-city]').forEach(el => {
+        el.addEventListener('click', () => {
+            document.getElementById('city-input').value = el.textContent;
+            document.getElementById('search-form').dispatchEvent(new Event('submit'));
+        });
+    });
 }
-
-/**
- * Hides error message
- */
-export function hideError() {
-    const errorDiv = document.getElementById('error-message');
-    errorDiv.hidden = true;
+export function displayWeather(weatherData, resultDiv) {
+    console.log('Displaying weather for:', weatherData.name);
+    resultDiv.hidden = false;
+    
+    const iconUrl = `https://openweathermap.org/img/wn/${weatherData.iconCode}@2x.png`;
+    const condition = weatherData.condition.charAt(0).toUpperCase() + weatherData.condition.slice(1);
+    
+    if (map && weatherData.lat && weatherData.lon) {
+        map.setView([weatherData.lat, weatherData.lon], 10);
+        
+        if (currentMarker) {
+            map.removeLayer(currentMarker);
+        }
+        
+        currentMarker = L.marker([weatherData.lat, weatherData.lon])
+            .addTo(map)
+            .bindPopup(`<b>${weatherData.name}</b><br>${condition}<br>${weatherData.temp}°C`)
+            .openPopup();
+    }
+    
+    const weatherEmoji = getWeatherEmoji(weatherData.condition);
+    
+    resultDiv.innerHTML = `
+        <div class="weather-card">
+            <h2 style="font-size: 28px; margin-bottom: 5px;">${weatherData.name}</h2>
+            <p style="color: #888; margin-bottom: 15px;">${weatherData.country || ''}</p>
+            
+            <div style="display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 15px;">
+                <img src="${iconUrl}" alt="${weatherData.condition}" style="width: 80px; height: 80px;">
+                <div>
+                    <div style="font-size: 48px; font-weight: bold;">${weatherData.temp}°C</div>
+                    <div style="font-size: 18px; color: #666;">${condition} ${weatherEmoji}</div>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 15px;">
+                <div style="background: #f7f7f7; padding: 12px; border-radius: 8px;">
+                    <div style="font-size: 12px; color: #888;">Feels Like</div>
+                    <div style="font-size: 18px; font-weight: bold;">${weatherData.feelsLike}°C</div>
+                </div>
+                <div style="background: #f7f7f7; padding: 12px; border-radius: 8px;">
+                    <div style="font-size: 12px; color: #888;">💧 Humidity</div>
+                    <div style="font-size: 18px; font-weight: bold;">${weatherData.humidity}%</div>
+                </div>
+                <div style="background: #f7f7f7; padding: 12px; border-radius: 8px;">
+                    <div style="font-size: 12px; color: #888;">💨 Wind</div>
+                    <div style="font-size: 18px; font-weight: bold;">${weatherData.windSpeed} m/s</div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; font-size: 13px; color: #999;">
+                Last updated: ${new Date().toLocaleTimeString()}
+            </div>
+        </div>
+    `;
 }
-
-/**
- * Shows loading state while fetching
- */
-export function showLoading() {
-    const weatherSection = document.getElementById('weather-result');
-    weatherSection.hidden = true;
-    hideError();
-    // Could add a loading spinner here
+function getWeatherEmoji(condition) {
+    const lower = condition.toLowerCase();
+    if (lower.includes('clear') || lower.includes('sunny')) return '☀️';
+    if (lower.includes('cloud')) return '☁️';
+    if (lower.includes('rain') || lower.includes('drizzle')) return '🌧️';
+    if (lower.includes('thunder') || lower.includes('storm')) return '⛈️';
+    if (lower.includes('snow')) return '❄️';
+    if (lower.includes('mist') || lower.includes('fog')) return '🌫️';
+    return '🌤️';
 }
