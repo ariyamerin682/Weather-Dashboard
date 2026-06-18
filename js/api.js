@@ -1,37 +1,77 @@
-// MOCK API - No API key needed!
-// This simulates what you'll get from the real API
+
+const API_KEY = '419f904644f31fd8feb98133c859472f';
 
 export async function fetchWeather(city) {
-    // Simulate network delay (like a real API)
-    await new Promise(resolve => setTimeout(resolve, 500));
     
-    // Fake data for demonstration
-    const mockData = {
-        'london': {
-            name: 'London',
-            main: { temp: 15, feels_like: 13, humidity: 72 },
-            wind: { speed: 4.1 },
-            weather: [{ description: 'overcast clouds', icon: '04d' }]
-        },
-        'tokyo': {
-            name: 'Tokyo',
-            main: { temp: 22, feels_like: 21, humidity: 65 },
-            wind: { speed: 3.2 },
-            weather: [{ description: 'clear sky', icon: '01d' }]
-        },
-        'new york': {
-            name: 'New York',
-            main: { temp: 18, feels_like: 17, humidity: 70 },
-            wind: { speed: 5.5 },
-            weather: [{ description: 'few clouds', icon: '02d' }]
+    if (!city || city.trim().length === 0) {
+        throw new Error('Please enter a valid city name');
+    }
+    
+    // Clean the city name
+    const cleanCity = city.trim().toLowerCase();
+    
+    const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(cleanCity)}&appid=${API_KEY}&units=metric`;
+    
+    console.log('🌐 Fetching weather for:', cleanCity);
+    
+    try {
+        const response = await fetch(url);
+        
+        // Handle different HTTP status codes
+        if (!response.ok) {
+            let errorMessage = '';
+            
+            switch (response.status) {
+                case 400:
+                    errorMessage = 'Bad request. Please check the city name.';
+                    break;
+                case 401:
+                    errorMessage = 'Invalid API key. Please check your OpenWeatherMap API key.';
+                    break;
+                case 404:
+                    errorMessage = `City "${city}" not found. Please check the spelling or try a different city.`;
+                    break;
+                case 429:
+                    errorMessage = 'Too many requests. Please wait a moment and try again.';
+                    break;
+                case 500:
+                    errorMessage = 'Weather service is temporarily unavailable. Please try again later.';
+                    break;
+                default:
+                    errorMessage = `Server error (${response.status}). Please try again.`;
+            }
+            
+            throw new Error(errorMessage);
         }
-    };
-    
-    const cityKey = city.toLowerCase();
-    
-    if (mockData[cityKey]) {
-        return mockData[cityKey];
-    } else {
-        throw new Error(`City "${city}" not found. Try: London, Tokyo, or New York`);
+        
+        const data = await response.json();
+        
+       
+        if (!data || !data.main || !data.weather) {
+            throw new Error('Invalid weather data received');
+        }
+      
+        return {
+            name: data.name,
+            country: data.sys?.country || '',
+            temp: Math.round(data.main.temp),
+            feelsLike: Math.round(data.main.feels_like),
+            humidity: data.main.humidity,
+            windSpeed: data.wind.speed,
+            condition: data.weather[0].description,
+            iconCode: data.weather[0].icon,
+            lat: data.coord.lat,
+            lon: data.coord.lon
+        };
+        
+    } catch (error) {
+        // Network errors
+        if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
+            throw new Error('Network error. Please check your internet connection.');
+        }
+        
+        // Re-throw other errors
+        console.error('API Error:', error);
+        throw error;
     }
 }
