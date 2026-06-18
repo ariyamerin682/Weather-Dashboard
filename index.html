@@ -4,10 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Weather Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <main>
+    <div id="background-map" aria-hidden="true"></div>
+    <button id="toggle-dashboard" class="toggle-dashboard" type="button" hidden>
+        Show Weather Dashboard
+    </button>
+    <main id="dashboard-panel">
         <header>
             <h1>Weather Dashboard</h1>
         </header>
@@ -60,6 +65,7 @@
              hidden></div>
     </main>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="js/app.js" type="module"></script>
 </body>
 </html>
