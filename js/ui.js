@@ -119,52 +119,67 @@ export function showError(resultDiv, error) {
     });
 }
 export function displayWeather(weatherData, resultDiv) {
-    console.log('Displaying weather for:', weatherData.name);
-    resultDiv.hidden = false;
+    if (!weatherData) {
+        console.error('❌ No weather data to display');
+        showError(resultDiv, 'No weather data available');
+        return;
+    }
     
-    const iconUrl = `https://openweathermap.org/img/wn/${weatherData.iconCode}@2x.png`;
-    const condition = weatherData.condition.charAt(0).toUpperCase() + weatherData.condition.slice(1);
+    if (!resultDiv) {
+        console.error('❌ resultDiv is null');
+        return;
+    }
     
+    // Safety checks for each property
+    const name = weatherData.name || 'Unknown';
+    const temp = weatherData.temp || '--';
+    const feelsLike = weatherData.feelsLike || '--';
+    const humidity = weatherData.humidity || '--';
+    const windSpeed = weatherData.windSpeed || '--';
+    const condition = weatherData.condition || 'Unknown';
+    const iconCode = weatherData.iconCode || '01d';
+    const iconUrl = `https://openweathermap.org/img/wn/${iconCode}@2x.png`;
+    
+    console.log('📊 Displaying weather for:', name);
+    
+    // Update map if coordinates exist
     if (map && weatherData.lat && weatherData.lon) {
         map.setView([weatherData.lat, weatherData.lon], 10);
-        
         if (currentMarker) {
             map.removeLayer(currentMarker);
         }
-        
         currentMarker = L.marker([weatherData.lat, weatherData.lon])
             .addTo(map)
-            .bindPopup(`<b>${weatherData.name}</b><br>${condition}<br>${weatherData.temp}°C`)
+            .bindPopup(`<b>${name}</b><br>${condition}<br>${temp}°C`)
             .openPopup();
     }
     
-    const weatherEmoji = getWeatherEmoji(weatherData.condition);
-    
+    // Display the weather
     resultDiv.innerHTML = `
-        <div class="weather-card">
-            <h2 style="font-size: 28px; margin-bottom: 5px;">${weatherData.name}</h2>
+        <div class="weather-card" style="animation: fadeInUp 0.5s ease-out;">
+            <h2 style="font-size: 28px; margin-bottom: 5px;">${name}</h2>
             <p style="color: #888; margin-bottom: 15px;">${weatherData.country || ''}</p>
             
             <div style="display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 15px;">
-                <img src="${iconUrl}" alt="${weatherData.condition}" style="width: 80px; height: 80px;">
+                <img src="${iconUrl}" alt="${condition}" style="width: 80px; height: 80px;">
                 <div>
-                    <div style="font-size: 48px; font-weight: bold;">${weatherData.temp}°C</div>
-                    <div style="font-size: 18px; color: #666;">${condition} ${weatherEmoji}</div>
+                    <div style="font-size: 48px; font-weight: bold;">${temp}°C</div>
+                    <div style="font-size: 18px; color: #666;">${condition}</div>
                 </div>
             </div>
             
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 15px;">
                 <div style="background: #f7f7f7; padding: 12px; border-radius: 8px;">
                     <div style="font-size: 12px; color: #888;">Feels Like</div>
-                    <div style="font-size: 18px; font-weight: bold;">${weatherData.feelsLike}°C</div>
+                    <div style="font-size: 18px; font-weight: bold;">${feelsLike}°C</div>
                 </div>
                 <div style="background: #f7f7f7; padding: 12px; border-radius: 8px;">
                     <div style="font-size: 12px; color: #888;">💧 Humidity</div>
-                    <div style="font-size: 18px; font-weight: bold;">${weatherData.humidity}%</div>
+                    <div style="font-size: 18px; font-weight: bold;">${humidity}%</div>
                 </div>
                 <div style="background: #f7f7f7; padding: 12px; border-radius: 8px;">
                     <div style="font-size: 12px; color: #888;">💨 Wind</div>
-                    <div style="font-size: 18px; font-weight: bold;">${weatherData.windSpeed} m/s</div>
+                    <div style="font-size: 18px; font-weight: bold;">${windSpeed} m/s</div>
                 </div>
             </div>
             

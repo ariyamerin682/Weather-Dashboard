@@ -1,59 +1,49 @@
+// OpenWeatherMap API
+// API Base URL for your backend
+const API_BASE = 'http://localhost:5000/api';
 
-const API_KEY = '419f904644f31fd8feb98133c859472f';
+// The rest of your code...
+const WEATHER_API_KEY = '419f904644f31fd8feb98133c859472f';
+const WEATHER_BASE_URL = 'https://api.openweathermap.org/data/2.5/weather';
 
+// Fetch weather from OpenWeatherMap and save to backend
 export async function fetchWeather(city) {
-    
     if (!city || city.trim().length === 0) {
         throw new Error('Please enter a valid city name');
     }
     
-    // Clean the city name
-    const cleanCity = city.trim().toLowerCase();
-    
-    const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(cleanCity)}&appid=${API_KEY}&units=metric`;
+    const cleanCity = city.trim();
+    const url = `${WEATHER_BASE_URL}?q=${encodeURIComponent(cleanCity)}&appid=${WEATHER_API_KEY}&units=metric`;
     
     console.log('🌐 Fetching weather for:', cleanCity);
     
     try {
         const response = await fetch(url);
         
-        // Handle different HTTP status codes
         if (!response.ok) {
             let errorMessage = '';
-            
             switch (response.status) {
-                case 400:
-                    errorMessage = 'Bad request. Please check the city name.';
+                case 404:
+                    errorMessage = `City "${city}" not found. Please check the spelling.`;
                     break;
                 case 401:
                     errorMessage = 'Invalid API key. Please check your OpenWeatherMap API key.';
                     break;
-                case 404:
-                    errorMessage = `City "${city}" not found. Please check the spelling or try a different city.`;
-                    break;
                 case 429:
-                    errorMessage = 'Too many requests. Please wait a moment and try again.';
-                    break;
-                case 500:
-                    errorMessage = 'Weather service is temporarily unavailable. Please try again later.';
+                    errorMessage = 'Too many requests. Please wait a moment.';
                     break;
                 default:
-                    errorMessage = `Server error (${response.status}). Please try again.`;
+                    errorMessage = `Error ${response.status}: Unable to fetch weather data.`;
             }
-            
             throw new Error(errorMessage);
         }
         
         const data = await response.json();
         
-       
-        if (!data || !data.main || !data.weather) {
-            throw new Error('Invalid weather data received');
-        }
-      
-        return {
+        // Format the weather data
+        const weatherData = {
             name: data.name,
-            country: data.sys?.country || '',
+            country: data.sys.country || '',
             temp: Math.round(data.main.temp),
             feelsLike: Math.round(data.main.feels_like),
             humidity: data.main.humidity,
@@ -64,14 +54,56 @@ export async function fetchWeather(city) {
             lon: data.coord.lon
         };
         
-    } catch (error) {
-        // Network errors
-        if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
-            throw new Error('Network error. Please check your internet connection.');
-        }
+        // Save to backend (don't wait for it)
+        saveCityToBackend(weatherData);
+        logSearchToBackend(weatherData);
         
-        // Re-throw other errors
-        console.error('API Error:', error);
+        return weatherData;
+        
+    } catch (error) {
+        console.error('❌ Weather API Error:', error);
         throw error;
+    }
+}
+
+// Save city to backend
+async function saveCityToBackend(weatherData) {
+    try {
+        const response = await fetch(`${API_BASE}/cities`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: weatherData.name,
+                country: weatherData.country,
+                lat: weatherData.lat,
+                lon: weatherData.lon
+            })
+        });
+        if (!response.ok) throw new Error('Failed to save city');
+        const data = await response.json();
+        console.log('✅ City saved to backend:', data.data?.name || weatherData.name);
+    } catch (error) {
+        console.warn('⚠️ Could not save city to backend:', error.message);
+    }
+}
+
+// Log search to backend
+async function logSearchToBackend(weatherData) {
+    try {
+        const response = await fetch(`${API_BASE}/searches`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                city: weatherData.name,
+                country: weatherData.country,
+                temperature: weatherData.temp,
+                condition: weatherData.condition,
+                successful: true
+            })
+        });
+        if (!response.ok) throw new Error('Failed to log search');
+        console.log('✅ Search logged to backend');
+    } catch (error) {
+        console.warn('⚠️ Could not log search:', error.message);
     }
 }
